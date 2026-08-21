@@ -1,4 +1,4 @@
-from pydantic import Field
+from pydantic import Field, validator
 from typing import List, Optional, Union, Literal
 
 from sdks.novavision.src.base.model import (
@@ -28,18 +28,42 @@ class QueryDetection(Detection):
 # -----------------------------------------------------------------------------
 
 class InputQueryDetections(Input):
-    name: Literal["inputQueryDetections"] = "inputQueryDetections"
-    value: List[Detection]
-    type: Literal["list"] = "list"
+    name: Literal[
+        "inputQueryDetections"
+    ] = "inputQueryDetections"
+
+    value: Union[List[Detection], Detection]
+    type: str = "object"
+
+    @validator("type", pre=True, always=True)
+    def set_type_based_on_value(cls, value, values):
+        detections = values.get("value")
+
+        if isinstance(detections, list):
+            return "list"
+
+        return "object"
 
     class Config:
         title = "Query Detections"
 
 
 class InputTargetDetections(Input):
-    name: Literal["inputTargetDetections"] = "inputTargetDetections"
-    value: List[Detection]
-    type: Literal["list"] = "list"
+    name: Literal[
+        "inputTargetDetections"
+    ] = "inputTargetDetections"
+
+    value: Union[List[Detection], Detection]
+    type: str = "object"
+
+    @validator("type", pre=True, always=True)
+    def set_type_based_on_value(cls, value, values):
+        detections = values.get("value")
+
+        if isinstance(detections, list):
+            return "list"
+
+        return "object"
 
     class Config:
         title = "Target Detections"
@@ -50,7 +74,10 @@ class InputTargetDetections(Input):
 # -----------------------------------------------------------------------------
 
 class OutputQueryDetections(Output):
-    name: Literal["outputQueryDetections"] = "outputQueryDetections"
+    name: Literal[
+        "outputQueryDetections"
+    ] = "outputQueryDetections"
+
     value: List[QueryDetection]
     type: Literal["list"] = "list"
 
@@ -59,7 +86,10 @@ class OutputQueryDetections(Output):
 
 
 class OutputMatchedQueryDetections(Output):
-    name: Literal["outputMatchedQueryDetections"] = "outputMatchedQueryDetections"
+    name: Literal[
+        "outputMatchedQueryDetections"
+    ] = "outputMatchedQueryDetections"
+
     value: List[QueryDetection]
     type: Literal["list"] = "list"
 
@@ -68,7 +98,10 @@ class OutputMatchedQueryDetections(Output):
 
 
 class OutputMatchedTargetDetections(Output):
-    name: Literal["outputMatchedTargetDetections"] = "outputMatchedTargetDetections"
+    name: Literal[
+        "outputMatchedTargetDetections"
+    ] = "outputMatchedTargetDetections"
+
     value: List[Detection]
     type: Literal["list"] = "list"
 
@@ -199,67 +232,112 @@ AnchorPointOption = Union[
 # -----------------------------------------------------------------------------
 
 class ConfigQueryPoint(Config):
-    name: Literal["ConfigQueryPoint"] = "ConfigQueryPoint"
-    value: AnchorPointOption = Field(default_factory=OptionCenter)
+    name: Literal[
+        "ConfigQueryPoint"
+    ] = "ConfigQueryPoint"
+
+    # Roboflow default = CENTER
+    value: AnchorPointOption = Field(
+        default_factory=OptionCenter
+    )
+
     type: Literal["object"] = "object"
     field: Literal["dropdownlist"] = "dropdownlist"
 
     class Config:
         title = "Query Anchor Point"
         json_schema_extra = {
-            "shortDescription": "Anchor point used for query detections. Default: CENTER."
+            "shortDescription": (
+                "Anchor point used for query detections. "
+                "Default: CENTER."
+            )
         }
 
 
 class ConfigTargetPoint(Config):
-    name: Literal["ConfigTargetPoint"] = "ConfigTargetPoint"
-    value: AnchorPointOption = Field(default_factory=OptionCenter)
+    name: Literal[
+        "ConfigTargetPoint"
+    ] = "ConfigTargetPoint"
+
+    # Roboflow default = CENTER
+    value: AnchorPointOption = Field(
+        default_factory=OptionCenter
+    )
+
     type: Literal["object"] = "object"
     field: Literal["dropdownlist"] = "dropdownlist"
 
     class Config:
         title = "Target Anchor Point"
         json_schema_extra = {
-            "shortDescription": "Anchor point used for target detections. Default: CENTER."
+            "shortDescription": (
+                "Anchor point used for target detections. "
+                "Default: CENTER."
+            )
         }
 
 
 class ConfigQueryKeypointName(Config):
-    name: Literal["ConfigQueryKeypointName"] = "ConfigQueryKeypointName"
+    name: Literal[
+        "ConfigQueryKeypointName"
+    ] = "ConfigQueryKeypointName"
+
     value: Optional[str] = None
+
     type: Literal["string"] = "string"
     field: Literal["textInput"] = "textInput"
 
     class Config:
         title = "Query Keypoint Name"
         json_schema_extra = {
-            "shortDescription": "Used only when Query Anchor Point is KEYPOINT."
+            "shortDescription": (
+                "Used only when Query Anchor Point "
+                "is KEYPOINT."
+            )
         }
 
 
 class ConfigTargetKeypointName(Config):
-    name: Literal["ConfigTargetKeypointName"] = "ConfigTargetKeypointName"
+    name: Literal[
+        "ConfigTargetKeypointName"
+    ] = "ConfigTargetKeypointName"
+
     value: Optional[str] = None
+
     type: Literal["string"] = "string"
     field: Literal["textInput"] = "textInput"
 
     class Config:
         title = "Target Keypoint Name"
         json_schema_extra = {
-            "shortDescription": "Used only when Target Anchor Point is KEYPOINT."
+            "shortDescription": (
+                "Used only when Target Anchor Point "
+                "is KEYPOINT."
+            )
         }
 
 
 class ConfigMaxDistance(Config):
-    name: Literal["ConfigMaxDistance"] = "ConfigMaxDistance"
-    value: Optional[int] = Field(default=None, ge=0)
+    name: Literal[
+        "ConfigMaxDistance"
+    ] = "ConfigMaxDistance"
+
+    # Roboflow: Optional[int], minimum = 0
+    value: Optional[int] = Field(
+        default=None,
+        ge=0,
+    )
+
     type: Literal["number"] = "number"
     field: Literal["textInput"] = "textInput"
 
     class Config:
         title = "Maximum Match Distance"
         json_schema_extra = {
-            "shortDescription": "Optional maximum match distance in pixels."
+            "shortDescription": (
+                "Optional maximum match distance "
+                "in pixels."
+            )
         }
 
 
@@ -273,11 +351,25 @@ class NearestNeighborDetectionMatchInputs(Inputs):
 
 
 class NearestNeighborDetectionMatchConfigs(Configs):
-    configQueryPoint: ConfigQueryPoint = Field(default_factory=ConfigQueryPoint)
-    configTargetPoint: ConfigTargetPoint = Field(default_factory=ConfigTargetPoint)
-    configQueryKeypointName: ConfigQueryKeypointName = Field(default_factory=ConfigQueryKeypointName)
-    configTargetKeypointName: ConfigTargetKeypointName = Field(default_factory=ConfigTargetKeypointName)
-    configMaxDistance: ConfigMaxDistance = Field(default_factory=ConfigMaxDistance)
+    configQueryPoint: ConfigQueryPoint = Field(
+        default_factory=ConfigQueryPoint
+    )
+
+    configTargetPoint: ConfigTargetPoint = Field(
+        default_factory=ConfigTargetPoint
+    )
+
+    configQueryKeypointName: ConfigQueryKeypointName = Field(
+        default_factory=ConfigQueryKeypointName
+    )
+
+    configTargetKeypointName: ConfigTargetKeypointName = Field(
+        default_factory=ConfigTargetKeypointName
+    )
+
+    configMaxDistance: ConfigMaxDistance = Field(
+        default_factory=ConfigMaxDistance
+    )
 
 
 class NearestNeighborDetectionMatchOutputs(Outputs):
@@ -291,7 +383,7 @@ class NearestNeighborDetectionMatchOutputs(Outputs):
 # -----------------------------------------------------------------------------
 
 class NearestNeighborDetectionMatchRequest(Request):
-    inputs: Optional[NearestNeighborDetectionMatchInputs] = None
+    inputs: NearestNeighborDetectionMatchInputs
     configs: NearestNeighborDetectionMatchConfigs
 
     class Config:
@@ -309,7 +401,9 @@ class NearestNeighborDetectionMatchResponse(Response):
 # -----------------------------------------------------------------------------
 
 class NearestNeighborDetectionMatch(Config):
-    name: Literal["NearestNeighborDetectionMatch"] = "NearestNeighborDetectionMatch"
+    name: Literal[
+        "NearestNeighborDetectionMatch"
+    ] = "NearestNeighborDetectionMatch"
 
     value: Union[
         NearestNeighborDetectionMatchRequest,
@@ -321,6 +415,7 @@ class NearestNeighborDetectionMatch(Config):
 
     class Config:
         title = "Nearest Neighbor Detection Match"
+
         json_schema_extra = {
             "target": {
                 "value": 0
@@ -329,13 +424,21 @@ class NearestNeighborDetectionMatch(Config):
 
 
 class ConfigExecutor(Config):
-    name: Literal["ConfigExecutor"] = "ConfigExecutor"
-    value: Union[NearestNeighborDetectionMatch]
+    name: Literal[
+        "ConfigExecutor"
+    ] = "ConfigExecutor"
+
+    value: NearestNeighborDetectionMatch
+
     type: Literal["executor"] = "executor"
-    field: Literal["dependentDropdownlist"] = "dependentDropdownlist"
+
+    field: Literal[
+        "dependentDropdownlist"
+    ] = "dependentDropdownlist"
 
     class Config:
         title = "Task"
+
         json_schema_extra = {
             "target": "value"
         }
@@ -351,5 +454,11 @@ class PackageConfigs(Configs):
 
 class PackageModel(Package):
     configs: PackageConfigs
-    type: Literal["component"] = "component"
-    name: Literal["NearestNeighborDetectionMatch"] = "NearestNeighborDetectionMatch"
+
+    type: Literal[
+        "component"
+    ] = "component"
+
+    name: Literal[
+        "NearestNeighborDetectionMatch"
+    ] = "NearestNeighborDetectionMatch"
