@@ -28,42 +28,18 @@ class QueryDetection(Detection):
 # -----------------------------------------------------------------------------
 
 class InputQueryDetections(Input):
-    name: Literal[
-        "inputQueryDetections"
-    ] = "inputQueryDetections"
-
-    value: Union[List[Detection], Detection]
-    type: str = "object"
-
-    @validator("type", pre=True, always=True)
-    def set_type_based_on_value(cls, value, values):
-        detections = values.get("value")
-
-        if isinstance(detections, list):
-            return "list"
-
-        return "object"
+    name: Literal["inputQueryDetections"] = "inputQueryDetections"
+    value: Union[List[Detection]]
+    type: str = "list"
 
     class Config:
         title = "Query Detections"
 
 
 class InputTargetDetections(Input):
-    name: Literal[
-        "inputTargetDetections"
-    ] = "inputTargetDetections"
-
-    value: Union[List[Detection], Detection]
-    type: str = "object"
-
-    @validator("type", pre=True, always=True)
-    def set_type_based_on_value(cls, value, values):
-        detections = values.get("value")
-
-        if isinstance(detections, list):
-            return "list"
-
-        return "object"
+    name: Literal["inputTargetDetections"] = "inputTargetDetections"
+    value: Union[List[Detection]]
+    type: str = "list"
 
     class Config:
         title = "Target Detections"
@@ -383,7 +359,7 @@ class NearestNeighborDetectionMatchOutputs(Outputs):
 # -----------------------------------------------------------------------------
 
 class NearestNeighborDetectionMatchRequest(Request):
-    inputs: NearestNeighborDetectionMatchInputs
+    inputs: Optional[NearestNeighborDetectionMatchInputs]
     configs: NearestNeighborDetectionMatchConfigs
 
     class Config:
@@ -424,21 +400,17 @@ class NearestNeighborDetectionMatch(Config):
 
 
 class ConfigExecutor(Config):
-    name: Literal[
-        "ConfigExecutor"
-    ] = "ConfigExecutor"
+    name: Literal["ConfigExecutor"] = "ConfigExecutor"
 
-    value: NearestNeighborDetectionMatch
+    value: Union[
+        NearestNeighborDetectionMatch
+    ]
 
     type: Literal["executor"] = "executor"
-
-    field: Literal[
-        "dependentDropdownlist"
-    ] = "dependentDropdownlist"
+    field: Literal["dependentDropdownlist"] = "dependentDropdownlist"
 
     class Config:
         title = "Task"
-
         json_schema_extra = {
             "target": "value"
         }

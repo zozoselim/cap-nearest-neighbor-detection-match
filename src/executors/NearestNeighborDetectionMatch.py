@@ -34,6 +34,20 @@ else:
 TIE_EPSILON_PX = 1.0
 
 
+VALID_ANCHORS = {
+    "CENTER",
+    "CENTER_LEFT",
+    "CENTER_RIGHT",
+    "TOP_CENTER",
+    "TOP_LEFT",
+    "TOP_RIGHT",
+    "BOTTOM_LEFT",
+    "BOTTOM_CENTER",
+    "BOTTOM_RIGHT",
+    "KEYPOINT",
+}
+
+
 class NearestNeighborDetectionMatch(Component):
 
     def __init__(self, request, bootstrap):
@@ -59,36 +73,37 @@ class NearestNeighborDetectionMatch(Component):
         # Configs
         # -----------------------------------------------------------------
 
-        query_point = self.request.get_param(
-            "ConfigQueryPoint"
+        query_point = self.safe_get_param(
+            "ConfigQueryPoint",
+            "configQueryPoint",
         )
 
-        target_point = self.request.get_param(
-            "ConfigTargetPoint"
+        target_point = self.safe_get_param(
+            "ConfigTargetPoint",
+            "configTargetPoint",
         )
 
-        query_keypoint_name = self.request.get_param(
-            "ConfigQueryKeypointName"
+        query_keypoint_name = self.safe_get_param(
+            "ConfigQueryKeypointName",
+            "configQueryKeypointName",
         )
 
-        target_keypoint_name = self.request.get_param(
-            "ConfigTargetKeypointName"
+        target_keypoint_name = self.safe_get_param(
+            "ConfigTargetKeypointName",
+            "configTargetKeypointName",
         )
 
-        max_distance = self.request.get_param(
-            "ConfigMaxDistance"
+        max_distance = self.safe_get_param(
+            "ConfigMaxDistance",
+            "configMaxDistance",
         )
 
-        # Roboflow defaults:
-        # query_point  = CENTER
-        # target_point = CENTER
-
-        self.query_point = self.unwrap_config_value(
+        self.query_point = self.normalize_anchor(
             query_point,
             default="CENTER",
         )
 
-        self.target_point = self.unwrap_config_value(
+        self.target_point = self.normalize_anchor(
             target_point,
             default="CENTER",
         )
@@ -129,52 +144,262 @@ class NearestNeighborDetectionMatch(Component):
     # Config helpers
     # ---------------------------------------------------------------------
 
-    @staticmethod
-    def unwrap_config_value(value, default=None):
+    def safe_get_param(
+        self,
+        *names,
+        default=None,
+    ):
         """
-        NovaVision dropdown/config wrapper'larından gerçek değeri çıkarır.
+        Bir parametre birden fazla isimle bulunabiliyorsa sırayla dener.
+
+        Optional alanlar request içinde hiç bulunmuyorsa component'in
+        düşmesini engeller.
+        """
+
+        for name in names:
+
+            try:
+                value = self.request.get_param(
+                    name
+                )
+            except Exception:
+                continue
+
+            if value is not None:
+                return value
+
+        return default
+
+    @staticmethod
+    def is_placeholder(value) -> bool:
+        """
+        NovaVision'ın {{changeable}} gibi henüz gerçek değer almamış
+        placeholder stringlerini tespit eder.
+        """
+
+        if not isinstance(
+            value,
+            str,
+        ):
+            return False
+
+        value = value.strip()
+
+        return (
+            value.startswith("{{")
+            and value.endswith("}}")
+        )
+
+    @staticmethod
+    def unwrap_config_value(
+        value,
+        default=None,
+    ):
+        """
+        NovaVision config wrapper'larından gerçek primitive değeri çıkarır.
+
+        Örnek:
+        Config -> value -> value -> primitive
         """
 
         current = value
 
-        for _ in range(4):
+        for _ in range(6):
 
             if current is None:
                 return default
 
             if isinstance(
                 current,
-                (str, int, float, bool),
+                (int, float, bool),
             ):
-                break
+                return current
 
-            if isinstance(current, dict):
+            if isinstance(
+                current,
+                str,
+            ):
+
+                current = current.strip()
+
+                if not current:
+                    return default
+
+                if (
+                    NearestNeighborDetectionMatch.is_placeholder(
+                        current
+                    )
+                ):
+                    return default
+
+                return current
+
+            if isinstance(
+                current,
+                dict,
+            ):
 
                 if "value" not in current:
-                    break
+                    return default
 
-                current = current["value"]
+                current = current.get(
+                    "value"
+                )
+
                 continue
 
-            if hasattr(current, "value"):
+            if hasattr(
+                current,
+                "value",
+            ):
+
                 current = current.value
+
                 continue
 
-            break
-
-        if current is None:
             return default
 
-        if isinstance(current, str):
-            current = current.strip()
-
-            if not current:
-                return default
-
-        return current
+        return default
 
     @staticmethod
-    def normalize_optional_string(value) -> Optional[str]:
+    def normalize_anchor(
+        value,
+        default="CENTER",
+    ) -> str:
+        """
+        Anchor dropdown seçimini güvenli biçimde çözer.
+
+        NovaVision request örneği:
+
+        {
+            "name": "CENTER",
+            "value": "{{changeable}}"
+        }
+
+        Burada gerçek seçim name alanındaki CENTER'dır.
+        """
+
+        if value is None:
+            return default
+
+        # -------------------------------------------------------------
+        # Primitive string
+        # -------------------------------------------------------------
+
+        if isinstance(
+            value,
+            str,
+        ):
+
+            value = value.strip()
+
+            if not value:
+                return default
+
+            if (
+                NearestNeighborDetectionMatch.is_placeholder(
+                    value
+                )
+            ):
+                return default
+
+            anchor = value.upper()
+
+            if anchor in VALID_ANCHORS:
+                return anchor
+
+            raise ValueError(
+                f"Unsupported anchor point: {value}"
+            )
+
+        # -------------------------------------------------------------
+        # Dict
+        # -------------------------------------------------------------
+
+        if isinstance(
+            value,
+            dict,
+        ):
+
+            option_name = value.get(
+                "name"
+            )
+
+            if isinstance(
+                option_name,
+                str,
+            ):
+
+                option_name = (
+                    option_name
+                    .strip()
+                    .upper()
+                )
+
+                if option_name in VALID_ANCHORS:
+                    return option_name
+
+            inner_value = value.get(
+                "value"
+            )
+
+            if inner_value is not None:
+
+                return (
+                    NearestNeighborDetectionMatch.normalize_anchor(
+                        inner_value,
+                        default=default,
+                    )
+                )
+
+            return default
+
+        # -------------------------------------------------------------
+        # Pydantic / NovaVision model
+        # -------------------------------------------------------------
+
+        option_name = getattr(
+            value,
+            "name",
+            None,
+        )
+
+        if isinstance(
+            option_name,
+            str,
+        ):
+
+            option_name = (
+                option_name
+                .strip()
+                .upper()
+            )
+
+            if option_name in VALID_ANCHORS:
+                return option_name
+
+        inner_value = getattr(
+            value,
+            "value",
+            None,
+        )
+
+        if inner_value is not None:
+
+            return (
+                NearestNeighborDetectionMatch.normalize_anchor(
+                    inner_value,
+                    default=default,
+                )
+            )
+
+        return default
+
+    @staticmethod
+    def normalize_optional_string(
+        value,
+    ) -> Optional[str]:
+
         value = (
             NearestNeighborDetectionMatch.unwrap_config_value(
                 value
@@ -184,51 +409,85 @@ class NearestNeighborDetectionMatch(Component):
         if value is None:
             return None
 
-        value = str(value).strip()
+        value = str(
+            value
+        ).strip()
 
         if not value:
+            return None
+
+        if (
+            NearestNeighborDetectionMatch.is_placeholder(
+                value
+            )
+        ):
             return None
 
         return value
 
     @staticmethod
-    def parse_max_distance(value) -> Optional[int]:
+    def parse_max_distance(
+        value,
+    ) -> Optional[int]:
+
         value = (
             NearestNeighborDetectionMatch.unwrap_config_value(
                 value
             )
         )
 
-        if value is None or value == "":
+        if value is None:
             return None
 
         try:
-            numeric_value = float(value)
-        except (TypeError, ValueError) as error:
+            numeric_value = float(
+                value
+            )
+
+        except (
+            TypeError,
+            ValueError,
+        ) as error:
+
             raise ValueError(
                 "Maximum Match Distance must be an integer."
             ) from error
 
         if numeric_value < 0:
+
             raise ValueError(
                 "Maximum Match Distance cannot be negative."
             )
 
         if not numeric_value.is_integer():
+
             raise ValueError(
                 "Maximum Match Distance must be an integer."
             )
 
-        return int(numeric_value)
+        return int(
+            numeric_value
+        )
 
     # ---------------------------------------------------------------------
-    # General model helpers
+    # Object helpers
     # ---------------------------------------------------------------------
 
     @staticmethod
-    def get_value(obj, key, default=None):
+    def get_value(
+        obj,
+        key,
+        default=None,
+    ):
 
-        if isinstance(obj, dict):
+        if obj is None:
+            return default
+
+        if isinstance(
+            obj,
+            dict,
+        ):
+
             return obj.get(
                 key,
                 default,
@@ -241,20 +500,33 @@ class NearestNeighborDetectionMatch(Component):
         )
 
     @staticmethod
-    def detection_to_dict(detection) -> dict:
-        """
-        Detection sonucunu response için bağımsız dict haline getirir.
-        """
+    def detection_to_dict(
+        detection,
+    ) -> dict:
 
-        if isinstance(detection, dict):
-            return deepcopy(detection)
+        if isinstance(
+            detection,
+            dict,
+        ):
 
-        if hasattr(detection, "model_dump"):
+            return deepcopy(
+                detection
+            )
+
+        if hasattr(
+            detection,
+            "model_dump",
+        ):
+
             return deepcopy(
                 detection.model_dump()
             )
 
-        if hasattr(detection, "dict"):
+        if hasattr(
+            detection,
+            "dict",
+        ):
+
             return deepcopy(
                 detection.dict()
             )
@@ -264,12 +536,17 @@ class NearestNeighborDetectionMatch(Component):
         )
 
     @staticmethod
-    def normalize_detections(detections) -> List:
+    def normalize_detections(
+        detections,
+    ) -> List:
 
         if detections is None:
             return []
 
-        if isinstance(detections, list):
+        if isinstance(
+            detections,
+            list,
+        ):
             return detections
 
         return [
@@ -281,7 +558,9 @@ class NearestNeighborDetectionMatch(Component):
     # ---------------------------------------------------------------------
 
     @staticmethod
-    def get_bbox(detection):
+    def get_bbox(
+        detection,
+    ):
 
         bbox = (
             NearestNeighborDetectionMatch.get_value(
@@ -291,6 +570,7 @@ class NearestNeighborDetectionMatch(Component):
         )
 
         if bbox is None:
+
             raise ValueError(
                 "Detection does not contain a boundingBox."
             )
@@ -309,41 +589,83 @@ class NearestNeighborDetectionMatch(Component):
             )
         )
 
-        left = float(
+        left = (
             NearestNeighborDetectionMatch.get_value(
                 bbox,
                 "left",
             )
         )
 
-        top = float(
+        top = (
             NearestNeighborDetectionMatch.get_value(
                 bbox,
                 "top",
             )
         )
 
-        width = float(
+        width = (
             NearestNeighborDetectionMatch.get_value(
                 bbox,
                 "width",
             )
         )
 
-        height = float(
+        height = (
             NearestNeighborDetectionMatch.get_value(
                 bbox,
                 "height",
             )
         )
 
-        right = left + width
-        bottom = top + height
+        if (
+            left is None
+            or top is None
+            or width is None
+            or height is None
+        ):
 
-        center_x = left + width / 2.0
-        center_y = top + height / 2.0
+            raise ValueError(
+                "boundingBox must contain left, top, width and height."
+            )
+
+        left = float(
+            left
+        )
+
+        top = float(
+            top
+        )
+
+        width = float(
+            width
+        )
+
+        height = float(
+            height
+        )
+
+        right = (
+            left
+            + width
+        )
+
+        bottom = (
+            top
+            + height
+        )
+
+        center_x = (
+            left
+            + width / 2.0
+        )
+
+        center_y = (
+            top
+            + height / 2.0
+        )
 
         anchor_points = {
+
             "CENTER": (
                 center_x,
                 center_y,
@@ -391,6 +713,7 @@ class NearestNeighborDetectionMatch(Component):
         }
 
         if anchor not in anchor_points:
+
             raise ValueError(
                 f"Unsupported anchor point: {anchor}"
             )
@@ -404,7 +727,9 @@ class NearestNeighborDetectionMatch(Component):
     # ---------------------------------------------------------------------
 
     @staticmethod
-    def has_keypoint_data(detection) -> bool:
+    def has_keypoint_data(
+        detection,
+    ) -> bool:
 
         keypoints = (
             NearestNeighborDetectionMatch.get_value(
@@ -413,7 +738,9 @@ class NearestNeighborDetectionMatch(Component):
             )
         )
 
-        return keypoints is not None
+        return (
+            keypoints is not None
+        )
 
     @staticmethod
     def validate_keypoint_configuration(
@@ -427,22 +754,24 @@ class NearestNeighborDetectionMatch(Component):
             return
 
         if not keypoint_name:
+
             raise ValueError(
-                f"{source_name} keypoint name must be "
-                "provided when KEYPOINT is selected."
+                f"{source_name} keypoint name must be provided "
+                "when KEYPOINT is selected."
             )
 
         if not detections:
             return
 
-        has_keypoint_data = any(
+        has_keypoints = any(
             NearestNeighborDetectionMatch.has_keypoint_data(
                 detection
             )
             for detection in detections
         )
 
-        if not has_keypoint_data:
+        if not has_keypoints:
+
             raise ValueError(
                 f"KEYPOINT selected for {source_name}, "
                 "but detections do not contain keyPoints."
@@ -475,8 +804,7 @@ class NearestNeighborDetectionMatch(Component):
             return None
 
         # -------------------------------------------------------------
-        # NovaVision extension:
-        # Numeric keypoint index support
+        # Numeric keypoint index
         # -------------------------------------------------------------
 
         if keypoint_name.isdigit():
@@ -485,13 +813,14 @@ class NearestNeighborDetectionMatch(Component):
                 keypoint_name
             )
 
-            if index < 0:
+            if index >= len(
+                keypoints
+            ):
                 return None
 
-            if index >= len(keypoints):
-                return None
-
-            keypoint = keypoints[index]
+            keypoint = keypoints[
+                index
+            ]
 
             cx = (
                 NearestNeighborDetectionMatch.get_value(
@@ -507,7 +836,10 @@ class NearestNeighborDetectionMatch(Component):
                 )
             )
 
-            if cx is None or cy is None:
+            if (
+                cx is None
+                or cy is None
+            ):
                 return None
 
             return (
@@ -516,7 +848,7 @@ class NearestNeighborDetectionMatch(Component):
             )
 
         # -------------------------------------------------------------
-        # Named keypoint support
+        # Named keypoint
         # -------------------------------------------------------------
 
         for keypoint in keypoints:
@@ -555,7 +887,10 @@ class NearestNeighborDetectionMatch(Component):
                 )
             )
 
-            if cx is None or cy is None:
+            if (
+                cx is None
+                or cy is None
+            ):
                 return None
 
             return (
@@ -563,8 +898,6 @@ class NearestNeighborDetectionMatch(Component):
                 float(cy),
             )
 
-        # Roboflow'da tek detection içinde keypoint bulunmazsa
-        # o detection eşleşmeye katılmaz.
         return None
 
     @staticmethod
@@ -613,13 +946,9 @@ class NearestNeighborDetectionMatch(Component):
     # ---------------------------------------------------------------------
 
     @staticmethod
-    def get_detection_id(detection):
-        """
-        Roboflow detection_id kullanır.
-
-        detectionId NovaVision/camelCase uyumluluğu için
-        fallback olarak desteklenmektedir.
-        """
+    def get_detection_id(
+        detection,
+    ):
 
         detection_id = (
             NearestNeighborDetectionMatch.get_value(
@@ -659,7 +988,6 @@ class NearestNeighborDetectionMatch(Component):
             )
         )
 
-        # Roboflow self-match davranışı
         if (
             query_id is not None
             and target_id is not None
@@ -667,9 +995,6 @@ class NearestNeighborDetectionMatch(Component):
         ):
             return True
 
-        # NovaVision fallback:
-        # gerçekten aynı Python koleksiyonu iki porta
-        # verilmişse aynı index kendisi kabul edilir.
         if (
             same_collection
             and query_index == target_index
@@ -679,7 +1004,7 @@ class NearestNeighborDetectionMatch(Component):
         return False
 
     # ---------------------------------------------------------------------
-    # Nearest-neighbor matching
+    # Matching
     # ---------------------------------------------------------------------
 
     def find_nearest_targets(
@@ -728,7 +1053,6 @@ class NearestNeighborDetectionMatch(Component):
                 point_b=target_anchor,
             )
 
-            # max_distance ranking işleminden önce uygulanır.
             if (
                 self.max_distance is not None
                 and distance > self.max_distance
@@ -754,7 +1078,8 @@ class NearestNeighborDetectionMatch(Component):
             target_detection
             for target_detection, distance in candidates
             if abs(
-                distance - minimum_distance
+                distance
+                - minimum_distance
             ) <= TIE_EPSILON_PX
         ]
 
@@ -778,7 +1103,7 @@ class NearestNeighborDetectionMatch(Component):
         )
 
         # -------------------------------------------------------------
-        # Validate keypoint configuration
+        # Keypoint validation
         # -------------------------------------------------------------
 
         self.validate_keypoint_configuration(
@@ -796,7 +1121,7 @@ class NearestNeighborDetectionMatch(Component):
         )
 
         # -------------------------------------------------------------
-        # Prepare outputs
+        # Prepare query output
         # -------------------------------------------------------------
 
         output_query_detections = [
@@ -809,18 +1134,14 @@ class NearestNeighborDetectionMatch(Component):
         matched_query_detections = []
         matched_target_detections = []
 
-        # Equality (==) kullanmıyoruz.
-        # Sadece gerçekten aynı object ise aynı collection kabul edilir.
+        # Sadece gerçekten aynı Python objesi ise aynı collection.
         same_collection = (
             self.input_query_detections
             is self.input_target_detections
-            or
-            query_detections
-            is target_detections
         )
 
         # -------------------------------------------------------------
-        # Matching
+        # Nearest-neighbor matching
         # -------------------------------------------------------------
 
         for query_index, query_detection in enumerate(
@@ -837,20 +1158,11 @@ class NearestNeighborDetectionMatch(Component):
                 same_collection=same_collection,
             )
 
-            # Roboflow:
-            # nearest_target_distance
-            #
-            # NovaVision naming convention:
-            # nearestTargetDistance
-
             output_query_detections[
                 query_index
             ][
                 "nearestTargetDistance"
             ] = nearest_distance
-
-            # matchedQuery ve matchedTarget aynı index'te
-            # birbirine karşılık gelir.
 
             for target_detection in nearest_targets:
 
@@ -869,7 +1181,7 @@ class NearestNeighborDetectionMatch(Component):
                 )
 
         # -------------------------------------------------------------
-        # Store outputs
+        # Outputs
         # -------------------------------------------------------------
 
         self.output_query_detections = (
